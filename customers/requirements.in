@@ -1,0 +1,10 @@
+aiohttp
+alembic
+asyncpgsa
+flake8-print
+ipdb
+ipython
+marshmallow
+pip-tools
+sqlalchemy_utils
+SQLAlchemy
