@@ -6,5 +6,6 @@ ipdb
 ipython
 marshmallow
 pip-tools
-sqlalchemy_utils
+psycopg2
 SQLAlchemy
+sqlalchemy_utils
