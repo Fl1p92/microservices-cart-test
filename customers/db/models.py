@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, MetaData, String, DateTime, Boolean
+from passlib.hash import sha256_crypt
+from sqlalchemy import Column, Integer, MetaData, String, DateTime, Boolean, select
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
 from sqlalchemy.sql.expression import text
 
@@ -42,6 +43,25 @@ class User(Base):
     password = Column(String, nullable=False)
     is_admin = Column(Boolean, default=False)
 
+    @staticmethod
+    def make_user_password_hash(raw_password: str) -> str:
+        """
+        Turn a plain-text password into a hash for database storage.
+        """
+        return sha256_crypt.hash(raw_password)
+
+    @staticmethod
+    def check_user_password(raw_password: str, hashed_password: str) -> bool:
+        """
+        Return a boolean of whether the raw_password was correct.
+        """
+        return sha256_crypt.verify(raw_password, hashed_password)
+
 
 # Sql alchemy tables
 users_t = User.__table__
+
+# Queries preset
+MAIN_USER_QUERY = (select([users_t.c.id, users_t.c.created, users_t.c.email,
+                           users_t.c.first_name, users_t.c.last_name, users_t.c.is_admin])
+                   .order_by(users_t.c.id))
