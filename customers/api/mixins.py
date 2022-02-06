@@ -18,7 +18,9 @@ class CheckObjectExistsMixin:
 
     async def check_object_exists(self):
         query = select(exists().where(self.check_exists_table.c.id == self.object_id))
-        if not await self.pg.fetchval(query):
+        async with self.engine.connect() as conn:
+            result = await conn.execute(query)
+        if not result.scalar():
             raise HTTPNotFound()
 
 

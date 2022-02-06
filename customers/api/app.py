@@ -7,30 +7,33 @@ from aiohttp import PAYLOAD_REGISTRY
 from aiohttp.web_app import Application
 from aiohttp_apispec import validation_middleware, AiohttpApiSpec
 from aiohttp_jwt import JWTMiddleware
-from asyncpgsa import PG
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from customers import settings
 from customers.api import API_VIEWS, JWT_WHITE_LIST
 from customers.api.middleware import error_middleware
 from customers.api.payloads import AsyncGenJSONListPayload, JsonPayload
+from customers.utils import is_jwt_token_revoked
 
 
 log = logging.getLogger(__name__)
 docs_path = '/api/v1/docs/'
 jwt_middleware = JWTMiddleware(secret_or_pub_key=settings.JWT_SECRET,
-                               whitelist=(f'{docs_path}.*') + JWT_WHITE_LIST,
-                               algorithms=["HS256"])
+                               whitelist=(f'{docs_path}.*', ) + JWT_WHITE_LIST,
+                               algorithms=["HS256"],
+                               is_revoked=is_jwt_token_revoked)
 
 
-async def setup_pg(app: Application, pg_url: str | None = None) -> PG:
+async def setup_db(app: Application, pg_url: str | None = None):
     """
     Initiate connection to database on startup and close it on cleanup
     """
     log.info(f'Connecting to database: {settings.DB_INFO}')
-
-    app['pg'] = PG()
-    await app['pg'].init(pg_url or settings.DB_URL)
-    await app['pg'].fetchval('SELECT 1')
+    engine = create_async_engine(pg_url or settings.DB_URL, echo=True)
+    async with engine.connect() as conn:
+        await conn.execute(text('Select 1;'))
+    app['engine'] = engine
     log.info(f'Connected to database: {settings.DB_INFO}')
 
     try:
@@ -38,7 +41,7 @@ async def setup_pg(app: Application, pg_url: str | None = None) -> PG:
 
     finally:
         log.info(f'Disconnecting from database: {settings.DB_INFO}')
-        await app['pg'].pool.close()
+        await app['engine'].dispose()
         log.info(f'Disconnected from database: {settings.DB_INFO}')
 
 
@@ -51,7 +54,7 @@ def create_app(pg_url: str | None = None) -> Application:
     )
 
     # Connect at start to postgres and disconnect at stop
-    app.cleanup_ctx.append(partial(setup_pg, pg_url=pg_url))
+    app.cleanup_ctx.append(partial(setup_db, pg_url=pg_url))
 
     # Registering views
     for view in API_VIEWS:

@@ -5,7 +5,7 @@ from typing import Any
 
 from aiohttp.payload import JsonPayload as BaseJsonPayload, Payload
 from aiohttp.typedefs import JSONEncoder
-from asyncpg import Record
+from sqlalchemy.engine import Row
 
 
 __all__ = ('JsonPayload', 'AsyncGenJSONListPayload')
@@ -19,8 +19,8 @@ def convert(value):
     https://docs.python.org/3/library/json.html#json.dump
     """
     match value:
-        case Record():
-            return dict(value)
+        case Row():
+            return value._asdict()
         case datetime():
             return value.isoformat()
         case _:
@@ -33,7 +33,7 @@ dumps = partial(json.dumps, default=convert, ensure_ascii=False)
 class JsonPayload(BaseJsonPayload):
     """
     Replaces the serialization function with a smarter one (able to pack
-    asyncpg.Record and other entities into JSON objects).
+    sqlalchemy.engine.Row and other entities into JSON objects).
     """
     def __init__(self,
                  value: Any,

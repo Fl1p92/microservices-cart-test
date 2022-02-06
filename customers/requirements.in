@@ -3,13 +3,11 @@ aiohttp-apispec
 aiohttp_jwt
 aiomisc
 alembic
-asyncpgsa
 flake8-print
 ipdb
 ipython
 marshmallow
 passlib
 pip-tools
-psycopg2
 SQLAlchemy
 sqlalchemy_utils

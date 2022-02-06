@@ -62,6 +62,6 @@ class User(Base):
 users_t = User.__table__
 
 # Queries preset
-MAIN_USER_QUERY = (select([users_t.c.id, users_t.c.created, users_t.c.email,
-                           users_t.c.first_name, users_t.c.last_name, users_t.c.is_admin])
-                   .order_by(users_t.c.id))
+MAIN_USER_COLS = [users_t.c.id, users_t.c.created, users_t.c.email, users_t.c.first_name, users_t.c.last_name,
+                  users_t.c.is_admin]
+MAIN_USER_QUERY = select(MAIN_USER_COLS).order_by(users_t.c.id)

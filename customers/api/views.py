@@ -5,13 +5,15 @@ from aiohttp.web_response import Response
 from aiohttp.web_urldispatcher import View
 from aiohttp_apispec import docs, request_schema, response_schema
 from asyncpg import UniqueViolationError
-from asyncpgsa import PG
 from marshmallow import ValidationError
+from sqlalchemy import select, or_, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from customers.api import schema, mixins
 from customers.api.permissions import IsAuthenticatedForObject
-from customers.db.models import User, users_t, MAIN_USER_QUERY
-from customers.utils import SelectQuery, get_jwt_token_for_user
+from customers.db.models import User, users_t, MAIN_USER_QUERY, MAIN_USER_COLS
+from customers.utils import get_jwt_token_for_user, get_inner_exception, SelectQuery
 
 
 # swagger security schema
@@ -22,8 +24,8 @@ class BaseView(View):
     URL_PATH: str
 
     @property
-    def pg(self) -> PG:
-        return self.request.app['pg']
+    def engine(self) -> AsyncEngine:
+        return self.request.app['engine']
 
 
 class LoginAPIView(BaseView):
@@ -39,16 +41,17 @@ class LoginAPIView(BaseView):
     @response_schema(schema.JWTTokenResponseSchema(), code=HTTPStatus.OK.value)
     async def post(self):
         validated_data = self.request['validated_data']
-        get_user_query = MAIN_USER_QUERY.where(users_t.c.email == validated_data['email'])
-        user = await self.pg.fetchrow(get_user_query)
-        if user is not None:
-            if User.check_user_password(validated_data['password'], user['password']):
-                token = get_jwt_token_for_user(user=user)
+        get_user_query = select(users_t).where(users_t.c.email == validated_data['email'])
+        async with self.engine.connect() as conn:
+            user_result = await conn.execute(get_user_query)
+        if (user := user_result.first()) is not None:
+            if User.check_user_password(validated_data['password'], user.password):
                 response_data = {
-                    'token': f'Bearer {token}',
-                    'user': schema.UserSchema(only=['id', 'email']).dump(user)
+                    'token': f'Bearer {get_jwt_token_for_user(user=user)}',
+                    'user': user
                 }
-                return Response(body={'data': response_data}, status=HTTPStatus.OK)
+                return Response(body=schema.JWTTokenResponseSchema().dump({'data': response_data}),
+                                status=HTTPStatus.OK)
         raise ValidationError({'non_field_errors': ['Unable to log in with provided credentials.']})
 
 
@@ -66,16 +69,21 @@ class UserCreateAPIView(BaseView):
     async def post(self):
         # The transaction is required in order to roll back partially added changes in case of an error
         # (or disconnection of the client without waiting for a response).
-        async with self.pg.transaction() as conn:
+        async with self.engine.begin() as conn:
             validated_data = self.request['validated_data']
             validated_data['password'] = User.make_user_password_hash(validated_data['password'])
-            insert_user_query = users_t.insert().returning(MAIN_USER_QUERY).values(validated_data)
+            insert_user_query = users_t.insert().returning(*MAIN_USER_COLS).values(validated_data)
             try:
-                new_user = await conn.fetchrow(insert_user_query)
-            except UniqueViolationError as err:
-                field = err.constraint_name.split('__')[-1]
-                raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
-        return Response(body={'data': new_user}, status=HTTPStatus.CREATED)
+                new_user_result = await conn.execute(insert_user_query)
+            except IntegrityError as err:
+                if (inner_exc := get_inner_exception(err)) and isinstance(inner_exc, UniqueViolationError):
+                    field = inner_exc.constraint_name.split('__')[-1]
+                    raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
+                else:
+                    raise ValidationError({'non_field_errors': ['Failed to create user with provided data.']})
+            response_data = new_user_result.first()
+        return Response(body=schema.UserDetailsResponseSchema().dump({'data': response_data}),
+                        status=HTTPStatus.CREATED)
 
 
 class UsersListAPIView(BaseView):
@@ -91,19 +99,16 @@ class UsersListAPIView(BaseView):
           parameters=[{
               'in': 'query',
               'name': 'search',
-              'description': 'Search for a user by id or email'
+              'description': 'Search for a user by email, first name or last name'
           }])
     @response_schema(schema.UserListResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
         users_query = MAIN_USER_QUERY
         if search_term := self.request.query.get('search'):
-            try:
-                search_term = int(search_term)
-            except ValueError:
-                users_query = users_query.where(users_t.c.email.ilike(f'%{search_term}%'))
-            else:
-                users_query = users_query.where(users_t.c.id == search_term)
-        body = SelectQuery(query=users_query, transaction_ctx=self.pg.transaction())
+            users_query = users_query.where(or_(users_t.c.email.ilike(f'%{search_term}%'),
+                                                users_t.c.first_name.ilike(f'%{search_term}%'),
+                                                users_t.c.last_name.ilike(f'%{search_term}%')))
+        body = SelectQuery(query=users_query, transaction_ctx=self.engine.begin())
         return Response(body=body, status=HTTPStatus.OK)
 
 
@@ -119,8 +124,9 @@ class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.Che
 
     async def get_user(self):
         user_query = MAIN_USER_QUERY.where(users_t.c.id == self.object_id)
-        user = await self.pg.fetchrow(user_query)
-        return user
+        async with self.engine.connect() as conn:
+            user_result = await conn.execute(user_query)
+        return user_result.first()
 
     @docs(tags=['users'],
           summary='Retrieve user',
@@ -128,8 +134,9 @@ class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.Che
           security=jwt_security)
     @response_schema(schema.UserDetailsResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
-        user = await self.get_user()
-        return Response(body={'data': user}, status=HTTPStatus.OK)
+        response_data = await self.get_user()
+        return Response(body=schema.UserDetailsResponseSchema().dump({'data': response_data}),
+                        status=HTTPStatus.OK)
 
     @docs(tags=['users'],
           summary='Update user',
@@ -138,22 +145,26 @@ class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.Che
     @request_schema(schema.UserPatchSchema())
     @response_schema(schema.UserDetailsResponseSchema(), code=HTTPStatus.OK.value)
     async def patch(self):
-        async with self.pg.transaction() as conn:
+        async with self.engine.begin() as conn:
             validated_data = self.request['validated_data']
 
             # Blocking will avoid race conditions between concurrent user change requests
-            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.object_id)
+            await conn.execute(text('SELECT pg_advisory_xact_lock(:lid)').bindparams(lid=self.object_id))
 
             patch_query = users_t.update().values(validated_data).where(users_t.c.id == self.object_id)
             try:
-                await conn.fetch(patch_query)
-            except UniqueViolationError as err:
-                field = err.constraint_name.split('__')[-1]
-                raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
+                await conn.execute(patch_query)
+            except IntegrityError as err:
+                if (inner_exc := get_inner_exception(err)) and isinstance(inner_exc, UniqueViolationError):
+                    field = inner_exc.constraint_name.split('__')[-1]
+                    raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
+                else:
+                    raise ValidationError({'non_field_errors': ['Failed to update user with provided data.']})
 
         # Get up-to-date information about the user
-        user = await self.get_user()
-        return Response(body={'data': user}, status=HTTPStatus.OK)
+        response_data = await self.get_user()
+        return Response(body=schema.UserDetailsResponseSchema().dump({'data': response_data}),
+                        status=HTTPStatus.OK)
 
     @docs(tags=['users'],
           summary='Delete user',
@@ -162,7 +173,8 @@ class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.Che
     @response_schema(schema.NoContentResponseSchema(), code=HTTPStatus.NO_CONTENT.value)
     async def delete(self):
         delete_query = users_t.delete().where(users_t.c.id == self.object_id)
-        await self.pg.fetch(delete_query)
+        async with self.engine.begin() as conn:
+            await conn.execute(delete_query)
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
 
 
@@ -182,13 +194,13 @@ class UserChangePasswordAPIView(mixins.CheckObjectExistsMixin, mixins.CheckUserP
     @request_schema(schema.UserChangePasswordSchema())
     @response_schema(schema.NoContentResponseSchema(), code=HTTPStatus.OK.value)
     async def patch(self):
-        async with self.pg.transaction() as conn:
+        async with self.engine.begin() as conn:
             validated_data = self.request['validated_data']
             new_password_hash = User.make_user_password_hash(validated_data['new_password'])
 
             # Blocking will avoid race conditions between concurrent user change requests
-            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.object_id)
+            await conn.execute(text('SELECT pg_advisory_xact_lock(:lid)').bindparams(lid=self.object_id))
 
             patch_query = users_t.update().values(password=new_password_hash).where(users_t.c.id == self.object_id)
-            await conn.fetch(patch_query)
+            await conn.execute(patch_query)
         return Response(body={}, status=HTTPStatus.OK)

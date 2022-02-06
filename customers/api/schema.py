@@ -17,13 +17,14 @@ class UserSchema(BaseSchema):
 
 class JWTTokenSchema(Schema):
     token = fields.String(required=True)
-    user = fields.Nested(UserSchema(only=('id', 'email')))
+    user = fields.Nested(UserSchema(exclude=('password', )))
 
 
 class UserPatchSchema(Schema):
     email = fields.Email()
     first_name = fields.String(validate=Length(min=1, max=256))
     last_name = fields.String(validate=Length(min=1, max=256))
+    is_admin = fields.Boolean()
 
 
 class UserChangePasswordSchema(Schema):
