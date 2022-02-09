@@ -1,5 +1,6 @@
 from passlib.hash import sha256_crypt
 from sqlalchemy import Column, Integer, MetaData, String, DateTime, Boolean, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.declarative import as_declarative, declared_attr
 from sqlalchemy.sql.expression import text
 
@@ -35,13 +36,21 @@ class Base:
     def __repr__(self):
         return f"[{self.id}] {self.__class__.__name__}"
 
+    async def async_save(self, db_session: AsyncSession):
+        """
+        Save current object to database via AsyncSession.
+        """
+        from customers.utils import add_objects_to_db  # to avoid circular imports
+
+        await add_objects_to_db(objects_list=[self], db_session=db_session)
+
 
 class User(Base):
     email = Column(String, nullable=False, unique=True)
     first_name = Column(String, nullable=False, default='')
     last_name = Column(String, nullable=False, default='')
     password = Column(String, nullable=False)
-    is_admin = Column(Boolean, default=False)
+    is_admin = Column(Boolean, nullable=False, default=False)
 
     @staticmethod
     def make_user_password_hash(raw_password: str) -> str:

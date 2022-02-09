@@ -79,7 +79,7 @@ class UserCreateAPIView(BaseView):
                 if (inner_exc := get_inner_exception(err)) and isinstance(inner_exc, UniqueViolationError):
                     field = inner_exc.constraint_name.split('__')[-1]
                     raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
-                else:
+                else:  # pragma: no cover
                     raise ValidationError({'non_field_errors': ['Failed to create user with provided data.']})
             response_data = new_user_result.first()
         return Response(body=schema.UserDetailsResponseSchema().dump({'data': response_data}),
@@ -158,7 +158,7 @@ class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.Che
                 if (inner_exc := get_inner_exception(err)) and isinstance(inner_exc, UniqueViolationError):
                     field = inner_exc.constraint_name.split('__')[-1]
                     raise ValidationError({f"{field}": [f"User with this {field} already exists."]})
-                else:
+                else:  # pragma: no cover
                     raise ValidationError({'non_field_errors': ['Failed to update user with provided data.']})
 
         # Get up-to-date information about the user

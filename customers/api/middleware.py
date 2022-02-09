@@ -56,13 +56,13 @@ async def error_middleware(request: Request, handler):
         # Text exceptions (or exceptions without information) are formatted in JSON
         if not isinstance(err.text, JsonPayload):
             return format_http_error(err.text, err.status_code)
-        raise
+        raise  # pragma: no cover
 
     except ValidationError as err:
         # Checking for errors in views
         return handle_validation_error(err)
 
-    except Exception:
+    except Exception:  # pragma: no cover
         # All other exceptions cannot be displayed to the client as an HTTP response
         # and may inadvertently reveal internal information.
         log.exception('Unhandled exception')

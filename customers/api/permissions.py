@@ -14,7 +14,7 @@ class BasePermission(metaclass=abc.ABCMeta):
         """
         Return `True` if permission is granted, `False` otherwise.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
 
 class IsAuthenticatedForObject(BasePermission):

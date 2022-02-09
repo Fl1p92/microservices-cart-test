@@ -3,8 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-**/.idea/
+.idea/
 .coverage
 htmlcov/
 .env
 .pip-tools/
+.pytest_cache/

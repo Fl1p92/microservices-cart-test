@@ -1,12 +1,15 @@
 import logging
+from argparse import Namespace
 from collections.abc import AsyncIterable
 from datetime import datetime
 
 import jwt
 from aiohttp.web_request import Request
+from aiohttp.web_urldispatcher import DynamicResource
+from alembic.config import Config
 from sqlalchemy import select, exists
 from sqlalchemy.engine import Row
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 from sqlalchemy.sql import Select
 
 from customers import settings
@@ -22,7 +25,7 @@ def get_jwt_token_for_user(user: dict | Row | User) -> str:
     Return a jwt token for a given user_data.
     """
     if isinstance(user, (User, Row)):
-        user = UserSchema().dump(user)
+        user = UserSchema(only=('id', 'email', 'is_admin')).dump(user)
     payload_data = {
         'id': user['id'],
         'email': user['email'],
@@ -72,3 +75,33 @@ def get_inner_exception(outer_exception: Exception) -> Exception:
         if inner_exc := getattr(outer_exception, '__cause__', None):
             outer_exception = inner_exc
     return outer_exception
+
+
+def make_alembic_config(cmd_opts: Namespace) -> Config:
+    """
+    Creates alembic configuration object.
+    """
+    config = Config(file_=cmd_opts.config, ini_section=cmd_opts.name, cmd_opts=cmd_opts)
+    config.set_main_option('script_location', 'db/alembic')
+    if cmd_opts.pg_url:
+        config.set_main_option('sqlalchemy.url', cmd_opts.pg_url)
+    return config
+
+
+def url_for(path: str, **kwargs) -> str:
+    """
+    Generates URL for dynamic aiohttp route with included.
+    """
+    kwargs = {
+        key: str(value)  # All values must be str (for DynamicResource)
+        for key, value in kwargs.items()
+    }
+    return str(DynamicResource(path).url_for(**kwargs))
+
+
+async def add_objects_to_db(objects_list: list, db_session: AsyncSession) -> None:
+    """
+    Dirty hack to save objects to database via AsyncSession.
+    """
+    db_session.add_all(objects_list)
+    await db_session.commit()

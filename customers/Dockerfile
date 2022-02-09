@@ -1,15 +1,6 @@
 # Builder image
 FROM python:3.10-slim-bullseye as builder
 
-# Install required libs
-RUN apt-get update && apt-get install -y --no-install-recommends --no-install-suggests \
-    python3-dev \
-    libpq-dev \
-    gcc \
-    && apt-get remove --purge --autoremove -y \
-    && apt-get clean autoclean \
-    && rm -rf /var/lib/apt/lists/*
-
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 # Create a virtual environment and activate it
@@ -21,22 +12,13 @@ ENV PATH=$VIRTUAL_ENV/bin:$PATH
 COPY requirements.in .
 
 # Compile and install any needed packages specified in requirements.in
-# ToDo: Check for fixes for compatibility between pip-tools and pip 22.0 version
-# pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir pip==21.3.1 && \
+RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir pip-tools && \
     pip-compile --quiet --output-file=/opt/requirements.txt && \
     pip-sync /opt/requirements.txt --pip-args '--no-cache-dir'
 
 # Final image
 FROM python:3.10-slim-bullseye
-
-# Install required libs
-RUN apt-get update && apt-get install -y --no-install-recommends --no-install-suggests \
-    libpq-dev \
-    && apt-get remove --purge --autoremove -y \
-    && apt-get clean autoclean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment from the previous image
 COPY --from=builder /opt/venv /opt/venv

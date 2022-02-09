@@ -23,7 +23,7 @@ def convert(value):
             return value._asdict()
         case datetime():
             return value.isoformat()
-        case _:
+        case _:  # pragma: no cover
             raise TypeError(f'Unserializable value: {value!r}')
 
 
