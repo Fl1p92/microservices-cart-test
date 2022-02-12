@@ -2,19 +2,20 @@ version: "3.7"
 
 volumes:
   customers_postgres_data: {}
+  cart_postgres_data: {}
 
 services:
   customers:
     build: ./customers/
     container_name: customers
-    command: python
+    command: python -m api
     ports:
-      - "${SERVICE_PORT}:${SERVICE_PORT}"
+      - "8081:8081"
     env_file: customers/.env
     depends_on:
       - postgres_customers
     volumes:
-      - ./customers/:${PROJECT_ROOT}
+      - ./customers/:/home/micro_user/customers/
     stdin_open: true
     tty: true
     restart: always
@@ -34,3 +35,34 @@ services:
     restart: always
     volumes:
       - customers_postgres_data:/var/lib/postgresql/data
+
+  cart:
+    build: ./cart/
+    container_name: cart
+    command: python
+    ports:
+      - "8082:8082"
+    env_file: cart/.env
+    depends_on:
+      - postgres_cart
+    volumes:
+      - ./cart/:/home/micro_user/cart/
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER_ID}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  postgres_cart:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgres_cart
+    ports:
+      - "5433:5432"
+    env_file: cart/.env
+    restart: always
+    volumes:
+      - cart_postgres_data:/var/lib/postgresql/data

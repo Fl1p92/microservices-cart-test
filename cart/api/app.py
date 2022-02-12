@@ -6,23 +6,17 @@ from typing import AsyncIterable, Mapping
 from aiohttp import PAYLOAD_REGISTRY
 from aiohttp.web_app import Application
 from aiohttp_apispec import validation_middleware, AiohttpApiSpec
-from aiohttp_jwt import JWTMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from customers import settings
-from customers.api import API_VIEWS, JWT_WHITE_LIST
-from customers.api.middleware import error_middleware
-from customers.api.payloads import AsyncGenJSONListPayload, JsonPayload
-from customers.utils import is_jwt_token_revoked
+from cart import settings
+from cart.api import API_VIEWS
+from cart.api.middleware import error_middleware
+from cart.api.payloads import AsyncGenJSONListPayload, JsonPayload
 
 
 log = logging.getLogger(__name__)
 docs_path = '/api/v1/docs/'
-jwt_middleware = JWTMiddleware(secret_or_pub_key=settings.JWT_SECRET,
-                               whitelist=(f'{docs_path}.*', ) + JWT_WHITE_LIST,
-                               algorithms=["HS256"],
-                               is_revoked=is_jwt_token_revoked)
 
 
 async def setup_db(app: Application, pg_url: str | None = None):
@@ -49,7 +43,11 @@ def create_app(pg_url: str | None = None) -> Application:
     """
     Creates an instance of the application, ready to run.
     """
-    app = Application(middlewares=[error_middleware, jwt_middleware, validation_middleware])
+    app = Application(
+        middlewares=[error_middleware,
+                     # jwt_middleware,
+                     validation_middleware]
+    )
 
     # Connect at start to postgres and disconnect at stop
     app.cleanup_ctx.append(partial(setup_db, pg_url=pg_url))
@@ -60,7 +58,7 @@ def create_app(pg_url: str | None = None) -> Application:
         app.router.add_route('*', view.URL_PATH, view)
 
     # Swagger documentation
-    api_spec = AiohttpApiSpec(app=app, title='Customers Service API', version='v1', request_data_name='validated_data',
+    api_spec = AiohttpApiSpec(app=app, title='Cart Service API', version='v1', request_data_name='validated_data',
                               swagger_path=docs_path, url=f'{docs_path}swagger.json', static_path=f'{docs_path}static')
     # Manual add Authorize header to swagger
     api_key_scheme = {"type": "apiKey", "in": "header", "name": "Authorization"}

@@ -1,0 +1,14 @@
+aiohttp
+aiohttp-apispec
+aiomisc
+alembic
+asyncpg
+factory-boy
+flake8-print
+ipdb
+ipython
+marshmallow<4.0
+pip-tools
+pytest-aiohttp
+pytest-cov
+SQLAlchemy
