@@ -6,11 +6,14 @@ volumes:
 
 services:
   customers:
-    build: ./customers/
+    build:
+      context: .
+      dockerfile: ./customers/Dockerfile
     container_name: customers
     command: python -m api
     ports:
       - "8081:8081"
+      - "50051:50051"
     env_file: customers/.env
     depends_on:
       - postgres_customers
@@ -37,7 +40,9 @@ services:
       - customers_postgres_data:/var/lib/postgresql/data
 
   cart:
-    build: ./cart/
+    build:
+      context: .
+      dockerfile: ./cart/Dockerfile
     container_name: cart
     command: python
     ports:

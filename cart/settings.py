@@ -1,7 +1,9 @@
 import os
 
 
-SERVICE_PORT = int(os.environ.get('SERVICE_PORT', 8080))
+SERVICE_PORT = int(os.environ.get('SERVICE_PORT', 8082))
+
+GRPC_PORT = int(os.environ.get('GRPC_PORT', 50051))
 
 # Database URL
 try:

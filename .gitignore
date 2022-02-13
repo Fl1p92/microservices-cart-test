@@ -9,3 +9,8 @@ htmlcov/
 .env
 .pip-tools/
 .pytest_cache/
+
+# Protobufs
+!/protobufs/
+/protobufs/*
+!/protobufs/auth.proto

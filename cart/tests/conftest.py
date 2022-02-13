@@ -128,7 +128,7 @@ async def db_session(pg_engine: AsyncEngine) -> BaseAsyncSession:
 @pytest.fixture
 async def authorized_api_client(db_session, aiohttp_client, aiomisc_unused_port: int, postgres_url: str):
     """
-    Returns API test client with authorized user and user object.
+    Returns API test client.
     """
     app = create_app(pg_url=postgres_url)
     jwt_token = 'DUMB_JWT_TOKEN'

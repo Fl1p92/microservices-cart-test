@@ -5,6 +5,7 @@ alembic
 asyncpg
 factory-boy
 flake8-print
+grpcio-tools
 ipdb
 ipython
 marshmallow<4.0

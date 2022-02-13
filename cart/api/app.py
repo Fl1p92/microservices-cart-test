@@ -49,7 +49,7 @@ def create_app(pg_url: str | None = None) -> Application:
                      validation_middleware]
     )
 
-    # Connect at start to postgres and disconnect at stop
+    # Connect to postgres at start and disconnect at stop
     app.cleanup_ctx.append(partial(setup_db, pg_url=pg_url))
 
     # Registering views
