@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from aiohttp.web_exceptions import HTTPNotFound
-from aiohttp.web_response import Response
+from aiohttp.web_response import Response, StreamResponse
 from aiohttp.web_urldispatcher import View
 from aiohttp_apispec import docs, request_schema, response_schema
 from asyncpg import UniqueViolationError
@@ -10,8 +10,8 @@ from sqlalchemy import select, text, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from cart.api import schema
-from cart.api.mixins import CheckObjectExistsMixin, GetSerializedCartInfoMixin
+from cart.api import schema, mixins
+from cart.api.permissions import IsAuthenticatedForObject
 from cart.db.models import products_t, carts_t, cartitems_t
 from cart.utils import get_inner_exception, SelectQuery
 
@@ -51,16 +51,16 @@ class ProductsListAPIView(BaseView):
         return Response(body=body, status=HTTPStatus.OK)
 
 
-class CartRetrieveDestroyAPIView(GetSerializedCartInfoMixin, BaseView):
+class CartRetrieveDestroyAPIView(mixins.CheckUserPermissionMixin, mixins.GetSerializedCartInfoMixin, BaseView):
     """
     Returns information about or clear user's cart.
     """
     URL_PATH = r'/api/v1/cart/{user_id:\d+}/'
-    object_id_path = 'user_id'
+    permissions_classes = [IsAuthenticatedForObject]
 
     @property
-    def object_id(self) -> int:
-        return int(self.request.match_info.get(self.object_id_path))
+    def user_id(self) -> int:
+        return int(self.request.match_info.get('user_id'))
 
     @docs(tags=['cart'],
           summary="Retrieve user's cart",
@@ -70,11 +70,11 @@ class CartRetrieveDestroyAPIView(GetSerializedCartInfoMixin, BaseView):
     async def get(self):
         # Check user's existing cart. If not - create a new one
         async with self.engine.begin() as conn:
-            cart_exists_result = await conn.execute(select(exists().where(carts_t.c.user_id == self.object_id)))
+            cart_exists_result = await conn.execute(select(exists().where(carts_t.c.user_id == self.user_id)))
             if not cart_exists_result.scalar():
-                await conn.execute(carts_t.insert().values(user_id=self.object_id))
+                await conn.execute(carts_t.insert().values(user_id=self.user_id))
         # Get up-to-date information about user's cart
-        response_data = await self.get_cart_response_data(user_id=self.object_id)
+        response_data = await self.get_cart_response_data(user_id=self.user_id)
         return Response(body=schema.CartResponseSchema().dump({'data': response_data}),
                         status=HTTPStatus.OK)
 
@@ -86,22 +86,28 @@ class CartRetrieveDestroyAPIView(GetSerializedCartInfoMixin, BaseView):
     async def delete(self):
         # Check user's existing cart. If not - raise HTTPNotFound
         async with self.engine.begin() as conn:
-            cart_exists_result = await conn.execute(select(exists().where(carts_t.c.user_id == self.object_id)))
+            cart_exists_result = await conn.execute(select(exists().where(carts_t.c.user_id == self.user_id)))
             if not cart_exists_result.scalar():
                 raise HTTPNotFound()
             else:
-                delete_query = cartitems_t.delete().where(cartitems_t.c.cart_id == self.object_id)
+                delete_query = cartitems_t.delete().where(cartitems_t.c.cart_id == self.user_id)
                 await conn.execute(delete_query)
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
 
 
-class CartItemCreateAPIView(CheckObjectExistsMixin, GetSerializedCartInfoMixin, BaseView):
+class CartItemCreateAPIView(mixins.CheckObjectExistsMixin, mixins.CheckUserPermissionMixin,
+                            mixins.GetSerializedCartInfoMixin, BaseView):
     """
     Creates cart item, returns, changes or deletes user's cart.
     """
     URL_PATH = r'/api/v1/cart-item/{cart_id:\d+}/create'
     object_id_path = 'cart_id'
     check_exists_column = carts_t.c.user_id
+    permissions_classes = [IsAuthenticatedForObject]
+
+    @property
+    def user_id(self) -> int:
+        return self.object_id
 
     @docs(tags=['cart-item'],
           summary='Create new cart item',
@@ -116,7 +122,7 @@ class CartItemCreateAPIView(CheckObjectExistsMixin, GetSerializedCartInfoMixin, 
             validated_data = self.request['validated_data']
             # Create cart item with a check for uniqueness
             try:
-                await conn.execute(cartitems_t.insert().values(**validated_data, cart_id=self.object_id))
+                await conn.execute(cartitems_t.insert().values(**validated_data, cart_id=self.user_id))
             except IntegrityError as err:
                 if (inner_exc := get_inner_exception(err)) and isinstance(inner_exc, UniqueViolationError):
                     raise ValidationError({
@@ -126,18 +132,29 @@ class CartItemCreateAPIView(CheckObjectExistsMixin, GetSerializedCartInfoMixin, 
                 else:  # pragma: no cover
                     raise ValidationError({'non_field_errors': ['Failed to add this product to cart.']})
         # Get up-to-date information about user's cart
-        response_data = await self.get_cart_response_data(user_id=self.object_id)
+        response_data = await self.get_cart_response_data(user_id=self.user_id)
         return Response(body=schema.CartResponseSchema().dump({'data': response_data}),
                         status=HTTPStatus.CREATED)
 
 
-class CartItemUpdateDestroyAPIView(CheckObjectExistsMixin, GetSerializedCartInfoMixin, BaseView):
+class CartItemUpdateDestroyAPIView(mixins.CheckObjectExistsMixin, mixins.CheckUserPermissionMixin,
+                                   mixins.GetSerializedCartInfoMixin, BaseView):
     """
     Updates quantity or deletes cart item from user's cart.
     """
     URL_PATH = r'/api/v1/cart-item/{item_id:\d+}/'
     object_id_path = 'item_id'
     check_exists_column = cartitems_t.c.id
+    permissions_classes = [IsAuthenticatedForObject]
+
+    async def get_user_id(self) -> int:
+        async with self.engine.connect() as conn:
+            result = await conn.execute(select(cartitems_t.c.cart_id).where(cartitems_t.c.id == self.object_id))
+        return result.scalar()
+
+    async def _iter(self) -> StreamResponse:
+        self.user_id = await self.get_user_id()
+        return await super()._iter()
 
     @docs(tags=['cart-item'],
           summary='Update cart item quantity',
@@ -151,14 +168,10 @@ class CartItemUpdateDestroyAPIView(CheckObjectExistsMixin, GetSerializedCartInfo
             # Blocking will avoid race conditions between concurrent update requests
             await conn.execute(text('SELECT pg_advisory_xact_lock(:lid)').bindparams(lid=self.object_id))
             # Update query
-            patch_query = (cartitems_t.update()
-                           .values(validated_data)
-                           .where(cartitems_t.c.id == self.object_id)
-                           .returning(cartitems_t.c.cart_id))
-            cart_id_result = await conn.execute(patch_query)
-            cart_id = cart_id_result.scalar()
+            patch_query = cartitems_t.update().values(validated_data).where(cartitems_t.c.id == self.object_id)
+            await conn.execute(patch_query)
         # Get up-to-date information about user's cart
-        response_data = await self.get_cart_response_data(user_id=cart_id)
+        response_data = await self.get_cart_response_data(user_id=self.user_id)
         return Response(body=schema.CartResponseSchema().dump({'data': response_data}),
                         status=HTTPStatus.OK)
 

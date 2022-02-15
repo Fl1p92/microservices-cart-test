@@ -11,12 +11,11 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from cart import settings
 from cart.api import API_VIEWS
-from cart.api.middleware import error_middleware
+from cart.api.middleware import error_middleware, grpc_jwt_middleware
 from cart.api.payloads import AsyncGenJSONListPayload, JsonPayload
 
 
 log = logging.getLogger(__name__)
-docs_path = '/api/v1/docs/'
 
 
 async def setup_db(app: Application, pg_url: str | None = None):
@@ -43,11 +42,7 @@ def create_app(pg_url: str | None = None) -> Application:
     """
     Creates an instance of the application, ready to run.
     """
-    app = Application(
-        middlewares=[error_middleware,
-                     # jwt_middleware,
-                     validation_middleware]
-    )
+    app = Application(middlewares=[error_middleware, grpc_jwt_middleware, validation_middleware])
 
     # Connect to postgres at start and disconnect at stop
     app.cleanup_ctx.append(partial(setup_db, pg_url=pg_url))
@@ -59,7 +54,8 @@ def create_app(pg_url: str | None = None) -> Application:
 
     # Swagger documentation
     api_spec = AiohttpApiSpec(app=app, title='Cart Service API', version='v1', request_data_name='validated_data',
-                              swagger_path=docs_path, url=f'{docs_path}swagger.json', static_path=f'{docs_path}static')
+                              swagger_path=settings.DOCS_PATH, url=f'{settings.DOCS_PATH}swagger.json',
+                              static_path=f'{settings.DOCS_PATH}static')
     # Manual add Authorize header to swagger
     api_key_scheme = {"type": "apiKey", "in": "header", "name": "Authorization"}
     api_spec.spec.components.security_scheme('JWT Authorization', api_key_scheme)

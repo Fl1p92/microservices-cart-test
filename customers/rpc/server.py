@@ -58,7 +58,19 @@ class GRPCServer:
         grpc.aio.init_grpc_aio()
         self.server = grpc.aio.server()
         add_UserAuthServicer_to_server(UserAuthService(), self.server)
-        self.server.add_insecure_port(f"[::]:{settings.GRPC_PORT}")
+        # Add TLS creds for secure port
+        with open('server.key', 'rb') as file:
+            server_key = file.read()
+        with open('server.pem', 'rb') as file:
+            server_cert = file.read()
+        with open('ca.pem', 'rb') as file:
+            ca_cert = file.read()
+        creds = grpc.ssl_server_credentials(
+            [(server_key, server_cert)],
+            root_certificates=ca_cert,
+            require_client_auth=True
+        )
+        self.server.add_secure_port(f"[::]:{settings.GRPC_PORT}", creds)
 
     async def start(self):
         await self.server.start()

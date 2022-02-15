@@ -16,13 +16,13 @@ from customers.api import API_VIEWS, JWT_WHITE_LIST
 from customers.api.middleware import error_middleware
 from customers.api.payloads import AsyncGenJSONListPayload, JsonPayload
 from customers.rpc.server import GRPCServer
-from customers.utils import is_jwt_token_revoked
+from customers.utils import is_jwt_token_revoked, fix_white_list_urls
 
 
 log = logging.getLogger(__name__)
 docs_path = '/api/v1/docs/'
 jwt_middleware = JWTMiddleware(secret_or_pub_key=settings.JWT_SECRET,
-                               whitelist=(f'{docs_path}.*', ) + JWT_WHITE_LIST,
+                               whitelist=[f'{docs_path}.*'] + fix_white_list_urls(JWT_WHITE_LIST),
                                algorithms=settings.JWT_ALGORITHMS,
                                is_revoked=is_jwt_token_revoked)
 

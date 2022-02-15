@@ -46,10 +46,24 @@ def make_alembic_config(cmd_opts: Namespace) -> Config:
     Creates alembic configuration object.
     """
     config = Config(file_=cmd_opts.config, ini_section=cmd_opts.name, cmd_opts=cmd_opts)
-    config.set_main_option('script_location', 'db/alembic')
+    config.set_main_option('script_location', 'cart/db/alembic')
     if cmd_opts.pg_url:
         config.set_main_option('sqlalchemy.url', cmd_opts.pg_url)
     return config
+
+
+def fix_white_list_urls(urls: list[str]) -> list[str]:
+    """
+    Little helper to convert url_path to correct regexp.
+    """
+    fixed_urls = []
+    for url in urls:
+        if '{' in url:
+            head, tail = url.split('{')
+            _, tail = tail.split('}')
+            url = fr'{head}.*{tail}'
+        fixed_urls.append(url)
+    return fixed_urls
 
 
 def url_for(path: str, **kwargs) -> str:

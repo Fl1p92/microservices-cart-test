@@ -6,3 +6,4 @@ API_VIEWS = (
     CartRetrieveDestroyAPIView,  # cart
     CartItemCreateAPIView, CartItemUpdateDestroyAPIView  # cart items
 )
+JWT_WHITE_LIST = [ProductsListAPIView.URL_PATH]

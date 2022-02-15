@@ -26,4 +26,6 @@ class IsAuthenticatedForObject(BasePermission):
         """
         Return `True` if permission is granted or `user.is_admin == True`, `False` otherwise.
         """
-        return (request['payload'].get('id') == view.object_id) or request['payload'].get('is_admin', False)
+        has_perm = (request.get('payload', {}).get('user_id', -1) == view.user_id) or \
+            request.get('payload', {}).get('is_admin', False)
+        return has_perm
