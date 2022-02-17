@@ -94,7 +94,7 @@ def alembic_config(postgres_url: str) -> Config:
     """
     Creates a configuration object for alembic, configured for a temporary database.
     """
-    cmd_options = Namespace(config='alembic.ini', name='alembic', pg_url=postgres_url, raiseerr=False, x=None)
+    cmd_options = Namespace(config='customers/alembic.ini', name='alembic', pg_url=postgres_url, raiseerr=False, x=None)
     return make_alembic_config(cmd_options)
 
 

@@ -106,7 +106,7 @@ async def grpc_jwt_middleware(request: Request, handler):
     with open('ca.pem', 'rb') as file:
         ca_cert = file.read()
     creds = grpc.ssl_channel_credentials(ca_cert, client_key, client_cert)
-    grpc_client = UserAuthStub(grpc.secure_channel(f'{settings.GRPC_HOST}:{settings.GRPC_PORT}', creds))
+    grpc_client = UserAuthStub(grpc.secure_channel(f'{settings.CUSTOMERS_HOST}:{settings.GRPC_PORT}', creds))
     grpc_request = AuthRequest(token=JwtToken(value=jwt_token))
     try:
         grpc_response = grpc_client.ValidateToken(grpc_request)

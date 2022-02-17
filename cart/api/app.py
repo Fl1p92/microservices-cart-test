@@ -23,7 +23,7 @@ async def setup_db(app: Application, pg_url: str | None = None):
     Initiate connection to database on startup and close it on cleanup
     """
     log.info(f'Connecting to database: {settings.DB_INFO}')
-    engine = create_async_engine(pg_url or settings.DB_URL, echo=True)
+    engine = create_async_engine(pg_url or settings.DB_URL, echo=settings.DEBUG)
     async with engine.connect() as conn:
         await conn.execute(text('Select 1;'))
     app['engine'] = engine

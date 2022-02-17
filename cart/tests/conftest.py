@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from argparse import Namespace
 
+import aiohttp
 import pytest
 from alembic.config import Config
 from sqlalchemy import text
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSessio
 from sqlalchemy.orm import sessionmaker
 from yarl import URL
 
+from cart import settings
 from cart.api.app import create_app
 from cart.db.models import metadata
 from cart.settings import DB_URL
@@ -93,7 +95,7 @@ def alembic_config(postgres_url: str) -> Config:
     """
     Creates a configuration object for alembic, configured for a temporary database.
     """
-    cmd_options = Namespace(config='alembic.ini', name='alembic', pg_url=postgres_url, raiseerr=False, x=None)
+    cmd_options = Namespace(config='cart/alembic.ini', name='alembic', pg_url=postgres_url, raiseerr=False, x=None)
     return make_alembic_config(cmd_options)
 
 
@@ -126,16 +128,42 @@ async def db_session(pg_engine: AsyncEngine) -> BaseAsyncSession:
 
 
 @pytest.fixture
-async def authorized_api_client(db_session, aiohttp_client, aiomisc_unused_port: int, postgres_url: str):
+async def authorized_api_client(db_session, aiohttp_client, aiomisc_unused_port: int, postgres_url: str, event_loop):
     """
-    Returns API test client.
+    Returns API test client and JWT tokens for admin and non-admin from customers service.
     """
-    app = create_app(pg_url=postgres_url)
-    jwt_token = 'DUMB_JWT_TOKEN'
-    headers = {'Authorization': f'Bearer {jwt_token}'}
+    async with aiohttp.ClientSession() as session:
+        # Create user in customer service with is_admin = False
+        user_create_url = f'http://{settings.CUSTOMERS_HOST}:{settings.CUSTOMERS_PORT}/api/v1/users/create/'
+        email_passwd = f'cart_user{uuid.uuid4().hex}@email.com'
+        user_data = {'email': email_passwd, 'password': email_passwd, 'is_admin': False}
+        async with session.post(url=user_create_url, data=user_data) as response:
+            response_data = await response.json()
+            user_id = response_data['data']['id']
+        # Login as non-admin user, get JWT token
+        user_login_url = f'http://{settings.CUSTOMERS_HOST}:{settings.CUSTOMERS_PORT}/api/v1/auth/login/'
+        async with session.post(url=user_login_url, data=user_data) as response:
+            response_data = await response.json()
+            non_admin_jwt_token = response_data['data']['token']
+        # Set is_admin to True
+        patch_data = {'is_admin': True}
+        users_url = f'http://{settings.CUSTOMERS_HOST}:{settings.CUSTOMERS_PORT}/api/v1/users/{user_id}/'
+        async with session.patch(url=users_url,
+                                 data=patch_data,
+                                 headers={'Authorization': non_admin_jwt_token}) as response:
+            await response.json()
+        # Login as admin user, get JWT token
+        async with session.post(url=user_login_url, data=user_data) as response:
+            response_data = await response.json()
+            admin_jwt_token = response_data['data']['token']
 
-    client = await aiohttp_client(app, server_kwargs={'port': aiomisc_unused_port}, headers=headers)
+    app = create_app(pg_url=postgres_url)
+    client = await aiohttp_client(app, server_kwargs={'port': aiomisc_unused_port})
     try:
-        yield client
+        yield client, non_admin_jwt_token, admin_jwt_token, user_id
     finally:
+        # Delete created user
+        async with aiohttp.ClientSession() as session:
+            async with session.delete(url=users_url, headers={'Authorization': admin_jwt_token}) as response:
+                await response.json()
         await client.close()

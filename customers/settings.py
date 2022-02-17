@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 
 
+DEBUG = os.environ.get('DEBUG') == 'True'
 SERVICE_PORT = int(os.environ.get('SERVICE_PORT', 8081))
 
 GRPC_PORT = int(os.environ.get('GRPC_PORT', 50051))

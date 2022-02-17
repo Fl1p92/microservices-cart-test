@@ -14,7 +14,7 @@ from protobufs.auth_pb2_grpc import UserAuthServicer, add_UserAuthServicer_to_se
 log = logging.getLogger(__name__)
 
 
-class UserAuthService(UserAuthServicer):
+class UserAuthService(UserAuthServicer):  # pragma: no cover because we have integration tests in cart for it
     """
     gRPC user auth service, which check user's jwt token.
     """

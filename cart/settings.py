@@ -1,9 +1,11 @@
 import os
 
 
+DEBUG = os.environ.get('DEBUG') == 'True'
 SERVICE_PORT = int(os.environ.get('SERVICE_PORT', 8082))
 
-GRPC_HOST = os.environ.get('GRPC_HOST', 'localhost')
+CUSTOMERS_HOST = os.environ.get('CUSTOMERS_HOST', 'localhost')
+CUSTOMERS_PORT = int(os.environ.get('CUSTOMERS_PORT', 8081))
 GRPC_PORT = int(os.environ.get('GRPC_PORT', 50051))
 
 # Database URL

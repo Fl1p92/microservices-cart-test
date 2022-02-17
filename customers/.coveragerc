@@ -2,14 +2,13 @@
 [run]
 branch = True
 concurrency = greenlet
-omit = settings.py,
+omit = *settings.py,
        */versions/*,
        */__init__.py,
        */__main__.py,
-       */factories.py,
-       tests/*,
-       api/schema.py,
-       db/models.py,
+       *tests/*,
+       *api/schema.py,
+       *db/*,
 
 [report]
 precision = 4

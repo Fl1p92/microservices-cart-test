@@ -151,6 +151,9 @@ async def test_login_user(authorized_api_client, db_session):
 
 async def test_get_user_list(authorized_api_client, db_session):
     api_client, user = authorized_api_client
+    admin_user = UserFactory(is_admin=True)
+    await admin_user.async_save(db_session=db_session)
+    assert admin_user.is_admin  # specifies admin user
     # Creates users pool
     result = await db_session.execute(select(func.count(User.id)))
     initial_users_quantity = result.scalar()
@@ -160,7 +163,13 @@ async def test_get_user_list(authorized_api_client, db_session):
     ]
     await add_objects_to_db(objects_list=additional_users, db_session=db_session)
 
-    # Get all users
+    # Attempt to get all users by non-admin user
+    response = await api_client.get(url_for(views.UsersListAPIView.URL_PATH))
+    await check_response_for_authorized_user_permissions(response)
+
+    # Admin-user actions
+    api_client._session.headers["Authorization"] = f'Bearer {get_jwt_token_for_user(user=admin_user)}'
+    # Get all users by admin user
     response = await api_client.get(url_for(views.UsersListAPIView.URL_PATH))
     # Response checks
     assert response.status == HTTPStatus.OK

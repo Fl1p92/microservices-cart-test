@@ -86,11 +86,16 @@ class UserCreateAPIView(BaseView):
                         status=HTTPStatus.CREATED)
 
 
-class UsersListAPIView(BaseView):
+class UsersListAPIView(mixins.CheckUserPermissionMixin, BaseView):
     """
     Returns information for all users.
     """
     URL_PATH = '/api/v1/users/list/'
+    permissions_classes = [IsAuthenticatedForObject]
+
+    @property
+    def object_id(self) -> int:
+        return 0
 
     @docs(tags=['users'],
           summary='List of users',
