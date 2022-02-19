@@ -6,17 +6,14 @@ volumes:
 
 services:
   customers:
-    image: customers:0.1.0
+    image: prontsevychev/microservices-customers:0.1.0
     container_name: customers
-    command: python -m customers.api
     ports:
       - "8081:8081"
       - "50051:50051"
     env_file: customers/.env
     depends_on:
       - postgres_customers
-    volumes:
-      - ./customers/:/home/micro_user/customers/
     stdin_open: true
     tty: true
     restart: always
@@ -38,16 +35,13 @@ services:
       - customers_postgres_data:/var/lib/postgresql/data
 
   cart:
-    image: cart:0.1.0
+    image: prontsevychev/microservices-cart:0.1.0
     container_name: cart
-    command: python -m cart.api
     ports:
       - "8082:8082"
     env_file: cart/.env
     depends_on:
       - postgres_cart
-    volumes:
-      - ./cart/:/home/micro_user/cart/
     stdin_open: true
     tty: true
     restart: always

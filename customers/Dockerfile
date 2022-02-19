@@ -22,6 +22,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Final image
 FROM python:3.10-slim-bullseye
 
+# Install curl for healtcheck
+RUN apt-get update && apt-get install -y --no-install-recommends --no-install-suggests \
+    curl \
+    && apt-get remove --purge --autoremove -y \
+    && apt-get clean autoclean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the virtual environment from the previous image
 COPY --from=builder /opt/venv /opt/venv
 
@@ -45,11 +52,25 @@ WORKDIR $PROJECT_HOME
 # Copy generated requirements.txt from the builder
 COPY --from=builder --chown=$SYSTEM_USER_ID /opt/requirements.txt .
 
-# Create gRPC files and certs
+# Copy service code
 COPY --chown=$SYSTEM_USER_ID protobufs/auth.proto $PROTOBUFS_ROOT/auth.proto
+COPY --chown=$SYSTEM_USER_ID $SERVICE_NAME $PROJECT_ROOT
 COPY --chown=$SYSTEM_USER_ID ca.pem .
+
+# Create gRPC files and certs
 RUN --mount=type=secret,id=ca.key,uid=1000 \
     python3 -m grpc_tools.protoc -I $PROTOBUFS_ROOT --python_out=$PROTOBUFS_ROOT \
     --grpc_python_out=$PROTOBUFS_ROOT $PROTOBUFS_ROOT/auth.proto && \
     openssl req -nodes -newkey rsa:4096 -keyout server.key -out server.csr -subj /CN=$SERVICE_NAME && \
     openssl x509 -req -in server.csr -CA ca.pem -CAkey /run/secrets/ca.key -set_serial 1 -out server.pem
+
+# Health check for service availability
+HEALTHCHECK --interval=1m --timeout=3s \
+    CMD curl -s http://localhost:8081/api/v1/users/list/ || exit 1
+
+# Expose service ports
+EXPOSE 8081
+EXPOSE 50051
+
+# Run service server
+ENTRYPOINT ["python", "-m", "customers.api"]

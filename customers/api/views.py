@@ -99,7 +99,7 @@ class UsersListAPIView(mixins.CheckUserPermissionMixin, BaseView):
 
     @docs(tags=['users'],
           summary='List of users',
-          description='Returns information for all users',
+          description='Returns information for all users (for admins only)',
           security=jwt_security,
           parameters=[{
               'in': 'query',
