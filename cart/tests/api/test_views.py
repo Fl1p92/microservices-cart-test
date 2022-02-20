@@ -237,7 +237,7 @@ async def test_retrieve_destroy_cart(authorized_api_client, db_session):
 
     # Clear a non-existent other user's cart
     result = await db_session.execute(select(Cart.user_id).order_by(desc(Cart.user_id)).limit(1))
-    last_id = result.scalar()
+    last_id = result.scalar() or 0
     response = await api_client.delete(url_for(views.CartRetrieveDestroyAPIView.URL_PATH, user_id=last_id + 100))
     await check_response_for_objects_exists(response)
 
@@ -364,7 +364,7 @@ async def test_create_cart_item(authorized_api_client, db_session):
 
     # Try to create cart item in the non-existing cart
     result = await db_session.execute(select(Cart.user_id).order_by(desc(Cart.user_id)).limit(1))
-    last_id = result.scalar()
+    last_id = result.scalar() or 0
     response = await api_client.post(url_for(views.CartItemCreateAPIView.URL_PATH, cart_id=last_id + 100),
                                      data=other_cart_item_data)
     await check_response_for_objects_exists(response)
@@ -461,7 +461,7 @@ async def test_update_destroy_cart_item(authorized_api_client, db_session):
 
     # Attempt to update not exists cart_item
     result = await db_session.execute(select(CartItem.id).order_by(desc(CartItem.id)).limit(1))
-    last_id = result.scalar()
+    last_id = result.scalar() or 0
     response = await api_client.patch(url_for(views.CartItemUpdateDestroyAPIView.URL_PATH, item_id=last_id + 100),
                                       data=valid_patch_data)
     await check_response_for_objects_exists(response)
@@ -480,6 +480,6 @@ async def test_update_destroy_cart_item(authorized_api_client, db_session):
 
     # Attempt to delete not exists cart_item
     result = await db_session.execute(select(CartItem.id).order_by(desc(CartItem.id)).limit(1))
-    last_id = result.scalar()
+    last_id = result.scalar() or 0
     response = await api_client.delete(url_for(views.CartItemUpdateDestroyAPIView.URL_PATH, item_id=last_id + 100))
     await check_response_for_objects_exists(response)

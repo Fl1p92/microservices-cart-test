@@ -6,6 +6,7 @@ Create Date: 2022-02-18 16:04:49.514623
 
 """
 from alembic import op
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from customers.db.factories import UserFactory
@@ -35,6 +36,7 @@ def upgrade():
     with sessionmaker(bind=op.get_bind())() as session:
         with session.begin():
             session.add_all(users_list)
+            session.execute(text('ALTER SEQUENCE users_id_seq RESTART WITH 5;'))
 
 
 def downgrade():

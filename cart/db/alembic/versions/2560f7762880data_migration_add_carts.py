@@ -6,6 +6,7 @@ Create Date: 2022-02-18 17:06:38.432854
 
 """
 from alembic import op
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from cart.db.factories import CartFactory, CartItemFactory
@@ -26,6 +27,7 @@ def upgrade():
     with sessionmaker(bind=op.get_bind())() as session:
         with session.begin():
             session.add_all(carts + cart_items)
+            session.execute(text('ALTER SEQUENCE carts_user_id_seq RESTART WITH 5;'))
 
 
 def downgrade():
