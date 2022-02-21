@@ -1,0 +1,63 @@
+version: "3.7"
+
+volumes:
+  customers_postgres_data: {}
+  cart_postgres_data: {}
+
+services:
+  customers:
+    image: prontsevychev/microservices-customers:0.1.0
+    container_name: customers
+    ports:
+      - "8081:8081"
+      - "50051:50051"
+    env_file: customers/.env
+    depends_on:
+      - postgres_customers
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER_ID}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  postgres_customers:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgres_customers
+    ports:
+    - "5432:5432"
+    env_file: customers/.env
+    restart: always
+    volumes:
+      - customers_postgres_data:/var/lib/postgresql/data
+
+  cart:
+    image: prontsevychev/microservices-cart:0.1.0
+    container_name: cart
+    ports:
+      - "8082:8082"
+    env_file: cart/.env
+    depends_on:
+      - postgres_cart
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER_ID}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  postgres_cart:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgres_cart
+    ports:
+      - "5433:5432"
+    env_file: cart/.env
+    restart: always
+    volumes:
+      - cart_postgres_data:/var/lib/postgresql/data

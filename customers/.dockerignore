@@ -1,0 +1,7 @@
+.coveragerc
+.env
+.git
+.gitignore
+.pytest_cache
+docker-compose.yml
+htmlcov

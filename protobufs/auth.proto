@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+message JwtToken {
+  string value = 1;
+}
+
+message AuthRequest {
+  JwtToken token = 1;
+}
+
+message Payload {
+  int32 user_id = 1;
+  string email = 2;
+  bool is_admin = 3;
+}
+
+message AuthResponse {
+  Payload payload = 1;
+}
+
+service UserAuth {
+    rpc ValidateToken (AuthRequest) returns (AuthResponse);
+}

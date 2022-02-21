@@ -1,0 +1,18 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+concurrency = greenlet
+omit = *settings.py,
+       */versions/*,
+       */__init__.py,
+       */__main__.py,
+       *tests/*,
+       *api/schema.py,
+       *db/*,
+
+[report]
+precision = 4
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
